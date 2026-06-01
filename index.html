@@ -1289,18 +1289,53 @@
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files.yaml`;
 
             let sha = null;
-            const existingResponse = await fetch(url, {
-                headers: {
-                    'Authorization': `token ${apiKey}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
+            let attempts = 0;
+            const maxAttempts = 3;
+            let lastError = null;
 
-            if (existingResponse.ok) {
-                const data = await existingResponse.json();
-                sha = data.sha;
-            } else if (existingResponse.status !== 404) {
-                throw new Error(`获取文件信息失败: ${existingResponse.status}`);
+            while (attempts < maxAttempts) {
+                attempts++;
+                try {
+                    const existingResponse = await fetch(url, {
+                        headers: {
+                            'Authorization': `token ${apiKey}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        cache: 'no-store'
+                    });
+
+                    console.log(`第 ${attempts} 次尝试获取文件信息，状态码: ${existingResponse.status}`);
+
+                    if (existingResponse.ok || existingResponse.status === 304) {
+                        const data = await existingResponse.json();
+                        if (data && data.sha) {
+                            sha = data.sha;
+                            console.log("获取到sha:", sha);
+                            break;
+                        } else {
+                            console.log("响应数据中没有sha字段:", data);
+                        }
+                    } else if (existingResponse.status === 404) {
+                        console.log("文件不存在，将创建新文件");
+                        break;
+                    } else {
+                        const errorText = await existingResponse.text();
+                        lastError = new Error(`获取文件信息失败: ${existingResponse.status} - ${errorText.substring(0, 100)}`);
+                        console.error(lastError.message);
+                    }
+                } catch (e) {
+                    lastError = e;
+                    console.error("获取文件信息时发生异常:", e.message);
+                }
+                
+                if (attempts < maxAttempts) {
+                    console.log(`等待 1 秒后重试...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            if (!sha && attempts >= maxAttempts && lastError) {
+                throw lastError;
             }
 
             const content = jsyaml.dump({ files: filesArray || [] });
