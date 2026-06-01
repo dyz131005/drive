@@ -1289,18 +1289,19 @@
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files.yaml`;
 
             let sha = null;
-            try {
-                const existingResponse = await fetch(url, {
-                    headers: {
-                        'Authorization': `token ${apiKey}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                });
-                if (existingResponse.ok) {
-                    const data = await existingResponse.json();
-                    sha = data.sha;
+            const existingResponse = await fetch(url, {
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3+json'
                 }
-            } catch (e) {}
+            });
+
+            if (existingResponse.ok) {
+                const data = await existingResponse.json();
+                sha = data.sha;
+            } else if (existingResponse.status !== 404) {
+                throw new Error(`获取文件信息失败: ${existingResponse.status}`);
+            }
 
             const content = jsyaml.dump({ files: filesArray || [] });
             const base64Content = base64Encode(content);
