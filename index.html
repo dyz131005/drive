@@ -958,7 +958,7 @@
                 sha = data.sha;
             }
 
-            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const base64Content = base64Encode(content);
             const requestBody = {
                 message: message,
                 content: base64Content
@@ -1226,7 +1226,7 @@
             } catch (e) {}
 
             const content = jsyaml.dump({ version: version });
-            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const base64Content = base64Encode(content);
 
             const requestBody = {
                 message: `更新版本到v${version}`,
@@ -1273,6 +1273,15 @@
             }
         }
 
+        function base64Encode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
         async function saveFilesList(filesArray) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
@@ -1293,8 +1302,8 @@
                 }
             } catch (e) {}
 
-            const content = jsyaml.dump({ files: filesArray });
-            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const content = jsyaml.dump({ files: filesArray || [] });
+            const base64Content = base64Encode(content);
 
             const requestBody = {
                 message: "更新文件列表",
@@ -1311,7 +1320,10 @@
                 body: JSON.stringify(requestBody)
             });
 
-            if (!response.ok) throw new Error(`保存文件列表失败: ${response.status}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`保存文件列表失败: ${response.status} - ${errorText.substring(0, 200)}`);
+            }
             return await response.json();
         }
 
@@ -1357,7 +1369,7 @@
                     }
                 });
                 if (response.status === 404) {
-                    const base64Content = btoa(unescape(encodeURIComponent('# Drive\n\n文件存储仓库')));
+                    const base64Content = base64Encode('# Drive\n\n文件存储仓库');
                     await fetch(url, {
                         method: 'PUT',
                         headers: {
@@ -1374,17 +1386,19 @@
         }
 
         function arrayBufferToBase64(buffer) {
-            const binary = [];
             const bytes = new Uint8Array(buffer);
-            const chunkSize = 1024 * 1024;
+            let binary = '';
+            const chunkSize = 8192;
             
             for (let i = 0; i < bytes.length; i += chunkSize) {
                 const end = Math.min(i + chunkSize, bytes.length);
                 const chunk = bytes.subarray(i, end);
-                binary.push(String.fromCharCode(...chunk));
+                for (let j = 0; j < chunk.length; j++) {
+                    binary += String.fromCharCode(chunk[j]);
+                }
             }
             
-            return btoa(binary.join(''));
+            return btoa(binary);
         }
         const MAX_FILE_SIZE = 1024 * 1024 * 1024;
         const CHUNK_SIZE = 25 * 1024 * 1024;
@@ -1618,7 +1632,7 @@
             } catch (e) {}
 
             const content = jsyaml.dump(stats);
-            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const base64Content = base64Encode(content);
 
             const requestBody = {
                 message: "更新上传统计",
