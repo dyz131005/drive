@@ -1,0 +1,1968 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Awnidnrdooiwds 网盘</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --secondary: #7c3aed;
+            --accent: #f59e0b;
+            --accent-light: #fbbf24;
+            --danger: #ef4444;
+            --danger-dark: #dc2626;
+            --success: #10b981;
+            --dark: #111827;
+            --light: #f9fafb;
+            --gray: #6b7280;
+            --gray-light: #e5e7eb;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
+            --radius: 12px;
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background-color: var(--light);
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            transition: var(--transition);
+        }
+
+        header.scrolled {
+            padding: 12px 0;
+            box-shadow: var(--shadow);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            transition: var(--transition);
+        }
+
+        .logo-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .logo-text {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a, .nav-links button {
+            color: var(--dark);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: var(--transition);
+            padding: 5px 0;
+            position: relative;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .nav-links a:hover, .nav-links button:hover {
+            color: var(--primary);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: var(--dark);
+        }
+
+        .logout-btn {
+            padding: 8px 15px;
+            background-color: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .logout-btn:hover {
+            background-color: var(--danger-dark);
+        }
+
+        .menu-toggle {
+            display: none;
+            font-size: 1.5rem;
+            color: var(--dark);
+            cursor: pointer;
+        }
+
+        .drive-header {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 100px;
+            position: relative;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        }
+
+        .drive-content {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .drive-title {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .drive-title h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .drive-title p {
+            font-size: 1.2rem;
+            color: var(--gray);
+        }
+
+        .upload-zone {
+            background: white;
+            border-radius: var(--radius);
+            padding: 60px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            border: 2px dashed var(--gray-light);
+            transition: var(--transition);
+            margin-bottom: 30px;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(79, 70, 229, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: var(--gray);
+            margin-bottom: 20px;
+        }
+
+        .upload-btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .upload-btn:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-list {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .file-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .file-list-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .file-count {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .refresh-btn i {
+            font-size: 0.9rem;
+        }
+
+        .refresh-btn.loading i {
+            animation: spin 1s linear infinite;
+        }
+
+        .file-list-content {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 30px;
+            border-bottom: 1px solid var(--gray-light);
+            transition: var(--transition);
+        }
+
+        .file-item:hover {
+            background: var(--light);
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-icon {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, var(--secondary), var(--accent));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            margin-right: 15px;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 3px;
+        }
+
+        .file-meta {
+            font-size: 0.85rem;
+            color: var(--gray);
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .file-action-btn {
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .download-btn {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .download-btn:hover {
+            background-color: #059669;
+        }
+
+        .delete-btn {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background-color: var(--danger-dark);
+        }
+
+        .empty-state {
+            padding: 60px 30px;
+            text-align: center;
+            color: var(--gray);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-state p {
+            font-size: 1.1rem;
+        }
+
+        .login-prompt {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 80px;
+            text-align: center;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .login-prompt i {
+            font-size: 5rem;
+            color: var(--primary);
+            margin-bottom: 30px;
+        }
+
+        .login-prompt h2 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: var(--dark);
+        }
+
+        .login-prompt p {
+            color: var(--gray);
+            margin-bottom: 30px;
+        }
+
+        .login-prompt-btn {
+            display: inline-block;
+            padding: 15px 40px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .login-prompt-btn:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        footer {
+            background-color: var(--dark);
+            color: var(--light);
+            padding: 60px 0 30px;
+        }
+
+        .footer-content {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .footer-logo {
+            font-size: 2rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .copyright {
+            font-size: 1rem;
+            color: #9ca3af;
+            margin-bottom: 15px;
+        }
+
+        .credit {
+            color: #9ca3af;
+            margin-bottom: 15px;
+        }
+
+        .icp-link {
+            color: #9ca3af;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .icp-link:hover {
+            color: var(--accent);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--radius);
+            padding: 40px;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            color: var(--dark);
+        }
+
+        .modal-close {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: var(--gray-light);
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            color: var(--dark);
+        }
+
+        .modal-close:hover {
+            background: var(--gray);
+            color: white;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: var(--light);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            color: var(--gray);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--gray-light);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .feedback-status {
+            display: none;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .feedback-status.success {
+            display: block;
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .feedback-status.error {
+            display: block;
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .feedback-status.info {
+            display: block;
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background-color: var(--gray-light);
+            color: var(--dark);
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition);
+            margin-bottom: 30px;
+        }
+
+        .back-link:hover {
+            background-color: var(--gray);
+            color: white;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+
+            .nav-links {
+                position: fixed;
+                top: 80px;
+                left: 0;
+                width: 100%;
+                background: white;
+                flex-direction: column;
+                align-items: center;
+                padding: 20px 0;
+                transform: translateY(-100%);
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+                box-shadow: var(--shadow);
+                gap: 0;
+            }
+
+            .nav-links.active {
+                transform: translateY(0);
+                opacity: 1;
+                visibility: visible;
+            }
+
+            .nav-links li {
+                margin: 15px 0;
+            }
+
+            .drive-title h1 {
+                font-size: 2.2rem;
+            }
+
+            .upload-zone {
+                padding: 40px 20px;
+            }
+
+            .file-item {
+                padding: 12px 15px;
+            }
+
+            .file-actions {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .login-prompt {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header id="header">
+        <div class="container">
+            <nav>
+                <a href="../index.html" class="logo-container">
+                    <div class="logo-icon">
+                        <i class="fas fa-cloud"></i>
+                    </div>
+                    <span class="logo-text">Drive</span>
+                </a>
+                <ul class="nav-links" id="navLinks">
+                    <li><a href="../index.html"><i class="fas fa-home"></i> 返回主页</a></li>
+                    <li id="authNavItem"></li>
+                </ul>
+                <div class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="drive-header">
+            <div class="container">
+                <div class="drive-content">
+                    <a href="../index.html" class="back-link">
+                        <i class="fas fa-arrow-left"></i> 返回主页
+                    </a>
+                    <div class="drive-title">
+                        <h1><i class="fas fa-cloud"></i> Awnidnrdooiwds 网盘</h1>
+                        <p>安全、便捷的文件存储与分享</p>
+                    </div>
+
+                    <div id="loginPrompt" class="login-prompt" style="display: none;">
+                        <i class="fas fa-user-lock"></i>
+                        <h2>需要登录</h2>
+                        <p>请先登录您的账户才能使用网盘功能</p>
+                        <button class="login-prompt-btn" onclick="openAuthModal()">登录 / 注册</button>
+                    </div>
+
+                    <div id="driveMain" style="display: none;">
+                        <div class="upload-zone" id="uploadZone">
+                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <p class="upload-text">拖拽文件到此处，或点击下方按钮选择文件</p>
+                            <div class="feedback-status" id="uploadStatus"></div>
+                            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                                <i class="fas fa-plus"></i> 选择文件
+                            </button>
+                            <input type="file" id="fileInput" class="file-input" multiple>
+                        </div>
+
+                        <div class="file-list">
+                            <div class="file-list-header">
+                                <span class="file-list-title"><i class="fas fa-folder-open"></i> 我的文件</span>
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span class="file-count" id="fileCount">0 个文件</span>
+                                    <button class="refresh-btn" id="refreshBtn" onclick="handleRefresh()">
+                                        <i class="fas fa-sync-alt"></i> 刷新
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="file-list-content" id="fileListContent">
+                                <div class="empty-state">
+                                    <i class="fas fa-folder-open"></i>
+                                    <p>暂无文件，上传一些文件开始使用</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">Awnidnrdooiwds</div>
+                <p class="copyright">dyz版权所有 © 2023 Awnidnrdooiwds个人聚合站</p>
+                <p class="credit">本网站由 <strong>deepseek</strong> 编写</p>
+                <p><a href="https://icp.gov.moe/?keyword=20269997" target="_blank" class="icp-link">萌ICP备20269997号</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>账户</h2>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="tab-buttons">
+                <button class="tab-btn active" data-tab="login">登录</button>
+                <button class="tab-btn" data-tab="register">注册</button>
+            </div>
+            <div class="tab-content active" id="loginTab">
+                <div class="feedback-status" id="loginStatus"></div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginUsername">用户名</label>
+                        <input type="text" id="loginUsername" class="form-control" placeholder="请输入用户名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">密码</label>
+                        <input type="password" id="loginPassword" class="form-control" placeholder="请输入密码" required>
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">登录</button>
+                </form>
+            </div>
+            <div class="tab-content" id="registerTab">
+                <div class="feedback-status" id="registerStatus"></div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="regUsername">用户名</label>
+                        <input type="text" id="regUsername" class="form-control" placeholder="请输入用户名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regName">显示姓名</label>
+                        <input type="text" id="regName" class="form-control" placeholder="请输入显示姓名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regEmail">邮箱</label>
+                        <input type="email" id="regEmail" class="form-control" placeholder="请输入邮箱" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword">密码</label>
+                        <input type="password" id="regPassword" class="form-control" placeholder="请输入密码" required>
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">注册</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ENCODED_API_KEY = "V分2分p分K分c分0分1分H分R分k分l分W分b分W分x分Z分T分T分B分K分b分1分p分F分W分T分R分l分R分T分F分W分U分2分s分5分V分F分Z分U分V分l分p分V分M分n分h分G分Z分D分F分a分S分W分J分6分U分l分Z分i分S分E分E分w分V分l分V分V分M分W分E分y分U分l分h分a分R分V分Z分Z分T分U分Z分a分S分1分Z分X分e分G分9分X分R0分5分W分V分W分x分K分U0分1分F分c分G分F分Z分M分V分Z分3分U分l分U分x分c分k分9分U分U分m分x分i分V分G分x分Z分W分V分d分w分Y分V分N分X分T分n分V分X分b分X分R分U分V分l分h分o分a分F分l分V分V分l分d分X分b分E5分W分Z分U分Z分k分U分m分J分H分a分D分N分a分R分V分J分h分V0分d分W分W分F分R分U分S分l分V分h分e分m分x分o分V分F分R分C分U1分Z分W分R分n分V分X分b分T分F分V分Y分m分x分a分R分F分R分s分V分m分t分k分Q分T0分9";
+        const GITHUB_USERNAME = "dyz131005";
+        const GITHUB_REPO = "drive";
+        const ACCOUNTS_REPO = "dyz131005.github.io";
+        const ACCOUNTS_FILE = "accounts.yaml";
+        const MESSAGES_FILE = "messages.yaml";
+
+        let currentUser = null;
+
+        function decodeApiKey() {
+            try {
+                const withoutFen = ENCODED_API_KEY.replace(/分/g, '');
+                const firstDecode = atob(withoutFen);
+                const secondDecode = atob(firstDecode);
+                const thirdDecode = atob(secondDecode);
+                return thirdDecode;
+            } catch (error) {
+                console.error("API Key解码失败:", error);
+                return null;
+            }
+        }
+
+        async function fetchYamlFile(filename, repo = GITHUB_REPO) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${repo}/contents/${filename}`;
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3.raw'
+                }
+            });
+
+            if (response.status === 404) return null;
+            if (!response.ok) throw new Error(`获取${filename}失败: ${response.status}`);
+
+            return await response.text();
+        }
+
+        async function saveYamlFile(filename, content, message = "更新文件", repo = GITHUB_REPO) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${repo}/contents/${filename}`;
+
+            let sha = null;
+            const existingResponse = await fetch(url, {
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                cache: 'no-cache'
+            });
+
+            if (existingResponse.ok) {
+                const data = await existingResponse.json();
+                sha = data.sha;
+            }
+
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const requestBody = {
+                message: message,
+                content: base64Content
+            };
+
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(`保存${filename}失败: ${response.status}`);
+            return await response.json();
+        }
+
+        async function loadAccounts() {
+            try {
+                const yamlContent = await fetchYamlFile(ACCOUNTS_FILE, ACCOUNTS_REPO);
+                if (!yamlContent) return {};
+                return jsyaml.load(yamlContent) || {};
+            } catch (error) {
+                console.error("加载账户失败:", error);
+                return {};
+            }
+        }
+
+        async function registerUser(username, name, email, password) {
+            const accounts = await loadAccounts();
+
+            if (accounts[username]) {
+                throw new Error("用户名已存在");
+            }
+
+            accounts[username] = {
+                name: name,
+                email: email,
+                password: password,
+                createdAt: new Date().toISOString()
+            };
+
+            const yamlContent = jsyaml.dump(accounts);
+            await saveYamlFile(ACCOUNTS_FILE, yamlContent, `新用户注册: ${username}`, ACCOUNTS_REPO);
+
+            return accounts[username];
+        }
+
+        async function loginUser(username, password) {
+            const accounts = await loadAccounts();
+
+            if (!accounts[username]) {
+                throw new Error("用户不存在");
+            }
+
+            if (accounts[username].password !== password) {
+                throw new Error("密码错误");
+            }
+
+            return accounts[username];
+        }
+
+        function showFeedbackStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `feedback-status ${type}`;
+            setTimeout(() => {
+                element.className = 'feedback-status';
+            }, 5000);
+        }
+
+        function openAuthModal() {
+            document.getElementById('authModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        function updateAuthUI() {
+            const authNavItem = document.getElementById('authNavItem');
+            const loginPrompt = document.getElementById('loginPrompt');
+            const driveMain = document.getElementById('driveMain');
+
+            if (currentUser) {
+                authNavItem.innerHTML = `
+                    <div class="user-info">
+                        <div class="user-avatar">${currentUser.name.charAt(0).toUpperCase()}</div>
+                        <span class="user-name">${currentUser.name}</span>
+                        <button class="logout-btn" onclick="logout()">退出</button>
+                    </div>
+                `;
+                loginPrompt.style.display = 'none';
+                driveMain.style.display = 'block';
+                refreshFileList();
+            } else {
+                authNavItem.innerHTML = `<button onclick="openAuthModal()"><i class="fas fa-user"></i> 登录</button>`;
+                loginPrompt.style.display = 'block';
+                driveMain.style.display = 'none';
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            updateAuthUI();
+        }
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+            }
+            updateAuthUI();
+
+            const menuToggle = document.getElementById('menuToggle');
+            const navLinks = document.getElementById('navLinks');
+            menuToggle.addEventListener('click', () => {
+                navLinks.classList.toggle('active');
+            });
+
+            window.addEventListener('scroll', () => {
+                const header = document.getElementById('header');
+                if (window.scrollY > 50) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+            });
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                    document.getElementById(this.dataset.tab + 'Tab').classList.add('active');
+                });
+            });
+
+            document.getElementById('closeModal').addEventListener('click', closeAuthModal);
+
+            document.getElementById('authModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('authModal')) {
+                    closeAuthModal();
+                }
+            });
+
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const username = document.getElementById('loginUsername').value.trim();
+                const password = document.getElementById('loginPassword').value.trim();
+
+                showFeedbackStatus('loginStatus', '登录中...', 'info');
+
+                try {
+                    const user = await loginUser(username, password);
+                    currentUser = { ...user, username: username };
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    updateAuthUI();
+                    closeAuthModal();
+                } catch (error) {
+                    showFeedbackStatus('loginStatus', error.message, 'error');
+                }
+            });
+
+            document.getElementById('registerForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const username = document.getElementById('regUsername').value.trim();
+                const name = document.getElementById('regName').value.trim();
+                const email = document.getElementById('regEmail').value.trim();
+                const password = document.getElementById('regPassword').value.trim();
+
+                showFeedbackStatus('registerStatus', '注册中...', 'info');
+
+                try {
+                    const user = await registerUser(username, name, email, password);
+                    currentUser = { ...user, username: username };
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    updateAuthUI();
+                    closeAuthModal();
+                } catch (error) {
+                    showFeedbackStatus('registerStatus', error.message, 'error');
+                }
+            });
+
+            const uploadZone = document.getElementById('uploadZone');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFiles(files);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFiles(e.target.files);
+                }
+            });
+        });
+
+        async function getNextVersion() {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/version.yaml`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
+                });
+
+                if (response.status === 404) {
+                    return 1;
+                }
+
+                if (!response.ok) throw new Error(`获取版本失败: ${response.status}`);
+
+                const content = await response.text();
+                const data = jsyaml.load(content);
+                return (data.version || 0) + 1;
+            } catch (error) {
+                return 1;
+            }
+        }
+
+        async function saveVersion(version) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/version.yaml`;
+
+            let sha = null;
+            try {
+                const existingResponse = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (existingResponse.ok) {
+                    const data = await existingResponse.json();
+                    sha = data.sha;
+                }
+            } catch (e) {}
+
+            const content = jsyaml.dump({ version: version });
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+
+            const requestBody = {
+                message: `更新版本到v${version}`,
+                content: base64Content
+            };
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(`保存版本失败: ${response.status}`);
+            return await response.json();
+        }
+
+        async function getFilesList() {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files.yaml`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
+                });
+
+                if (response.status === 404) return [];
+
+                if (!response.ok) throw new Error(`获取文件列表失败: ${response.status}`);
+
+                const content = await response.text();
+                const data = jsyaml.load(content);
+                return data.files || [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        async function saveFilesList(filesArray) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files.yaml`;
+
+            let sha = null;
+            try {
+                const existingResponse = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (existingResponse.ok) {
+                    const data = await existingResponse.json();
+                    sha = data.sha;
+                }
+            } catch (e) {}
+
+            const content = jsyaml.dump({ files: filesArray });
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+
+            const requestBody = {
+                message: "更新文件列表",
+                content: base64Content
+            };
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(`保存文件列表失败: ${response.status}`);
+            return await response.json();
+        }
+
+        async function createReleaseWithTag(tagName, fileName) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            await initializeRepo(apiKey);
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/releases`;
+
+            const createResponse = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    tag_name: tagName,
+                    name: tagName,
+                    body: '-',
+                    draft: false,
+                    prerelease: false
+                })
+            });
+
+            if (!createResponse.ok) {
+                const errorText = await createResponse.text();
+                throw new Error(`创建release失败: ${createResponse.status} - ${errorText}`);
+            }
+
+            return await createResponse.json();
+        }
+
+        async function initializeRepo(apiKey) {
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/README.md`;
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (response.status === 404) {
+                    const base64Content = btoa(unescape(encodeURIComponent('# Drive\n\n文件存储仓库')));
+                    await fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: "初始化仓库",
+                            content: base64Content
+                        })
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function arrayBufferToBase64(buffer) {
+            const binary = [];
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 1024 * 1024;
+            
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const end = Math.min(i + chunkSize, bytes.length);
+                const chunk = bytes.subarray(i, end);
+                binary.push(String.fromCharCode(...chunk));
+            }
+            
+            return btoa(binary.join(''));
+        }
+        const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+        const CHUNK_SIZE = 25 * 1024 * 1024;
+        const DAILY_UPLOAD_LIMIT = 30;
+
+        async function uploadChunkToRepo(chunkData, version, fileName, chunkIndex, totalChunks) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const baseName = fileName.replace(/\.[^/.]+$/, '');
+            const extName = fileName.split('.').pop() || 'bin';
+            const chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
+            const filePath = `files/${chunkFileName}`;
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
+
+            const base64Content = arrayBufferToBase64(chunkData);
+
+            let sha = null;
+            try {
+                const existingResponse = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (existingResponse.ok) {
+                    const data = await existingResponse.json();
+                    sha = data.sha;
+                }
+            } catch (e) {}
+
+            const requestBody = {
+                message: `上传文件分片: ${chunkFileName} (${chunkIndex + 1}/${totalChunks})`,
+                content: base64Content
+            };
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`上传分片失败: ${response.status} - ${errorText}`);
+            }
+
+            return await response.json();
+        }
+
+        async function uploadFileInChunks(file, version) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const arrayBuffer = await file.arrayBuffer();
+            const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
+            const fileInfo = {
+                originalName: file.name,
+                size: file.size,
+                totalChunks: totalChunks,
+                chunkSize: CHUNK_SIZE,
+                uploadedAt: new Date().toISOString()
+            };
+
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
+                const chunkData = arrayBuffer.slice(start, end);
+                await uploadChunkToRepo(chunkData, version, file.name, i, totalChunks);
+            }
+
+            return fileInfo;
+        }
+
+        async function downloadChunk(version, fileName, chunkIndex, totalChunks = 1) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const baseName = fileName.replace(/\.[^/.]+$/, '');
+            let chunkFileName;
+            if (totalChunks === 1) {
+                chunkFileName = `v${version}_${baseName}.bin`;
+            } else {
+                chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
+            }
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3.raw'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`下载分片失败: ${response.status}`);
+            }
+
+            return await response.arrayBuffer();
+        }
+
+        async function downloadAndMergeFile(fileInfo) {
+            const { originalName, totalChunks, version } = fileInfo;
+            const chunks = [];
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunkData = await downloadChunk(version, originalName, i, totalChunks);
+                chunks.push(new Uint8Array(chunkData));
+            }
+
+            const totalSize = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+            const mergedBuffer = new Uint8Array(totalSize);
+            let offset = 0;
+            for (const chunk of chunks) {
+                mergedBuffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            return mergedBuffer;
+        }
+
+        async function uploadFileToRepo(file, version) {
+            if (file.size <= CHUNK_SIZE) {
+                const apiKey = decodeApiKey();
+                if (!apiKey) throw new Error("API Key解码失败");
+
+                const baseName = file.name.replace(/\.[^/.]+$/, '');
+                const extName = file.name.split('.').pop() || 'bin';
+                const fileNameWithVersion = `v${version}_${baseName}.bin`;
+                const filePath = `files/${fileNameWithVersion}`;
+                const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
+
+                const arrayBuffer = await file.arrayBuffer();
+                const base64Content = arrayBufferToBase64(arrayBuffer);
+
+                let sha = null;
+                try {
+                    const existingResponse = await fetch(url, {
+                        headers: {
+                            'Authorization': `token ${apiKey}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    if (existingResponse.ok) {
+                        const data = await existingResponse.json();
+                        sha = data.sha;
+                    }
+                } catch (e) {}
+
+                const requestBody = {
+                    message: `上传文件: ${fileNameWithVersion}`,
+                    content: base64Content
+                };
+                if (sha) requestBody.sha = sha;
+
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`上传文件失败: ${response.status} - ${errorText}`);
+                }
+
+                return {
+                    originalName: file.name,
+                    size: file.size,
+                    totalChunks: 1,
+                    chunkSize: file.size,
+                    uploadedAt: new Date().toISOString()
+                };
+            } else {
+                return await uploadFileInChunks(file, version);
+            }
+        }
+
+        async function getUploadStats() {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/upload_stats.yaml`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
+                });
+
+                if (response.status === 404) {
+                    return {};
+                }
+
+                if (!response.ok) throw new Error(`获取上传统计失败: ${response.status}`);
+
+                const content = await response.text();
+                return jsyaml.load(content) || {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        async function saveUploadStats(stats) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/upload_stats.yaml`;
+
+            let sha = null;
+            try {
+                const existingResponse = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (existingResponse.ok) {
+                    const data = await existingResponse.json();
+                    sha = data.sha;
+                }
+            } catch (e) {}
+
+            const content = jsyaml.dump(stats);
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+
+            const requestBody = {
+                message: "更新上传统计",
+                content: base64Content
+            };
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(`保存上传统计失败: ${response.status}`);
+            return await response.json();
+        }
+
+        async function checkUploadLimit() {
+            const stats = await getUploadStats();
+            const today = new Date().toISOString().split('T')[0];
+
+            if (!stats[currentUser.username]) {
+                stats[currentUser.username] = {};
+            }
+
+            if (stats[currentUser.username][today]) {
+                if (stats[currentUser.username][today] >= DAILY_UPLOAD_LIMIT) {
+                    throw new Error(`今日上传次数已达上限（${DAILY_UPLOAD_LIMIT}次），请明天再试`);
+                }
+            }
+
+            return stats;
+        }
+
+        async function handleFiles(files) {
+            if (!currentUser) {
+                showFeedbackStatus('uploadStatus', '请先登录', 'error');
+                return;
+            }
+
+            const uploadBtn = document.querySelector('.upload-btn');
+            uploadBtn.disabled = true;
+
+            try {
+                for (const file of files) {
+                    if (file.size > MAX_FILE_SIZE) {
+                        showFeedbackStatus('uploadStatus', `文件 ${file.name} 超过大小限制（最大1024MB）`, 'error');
+                        uploadBtn.disabled = false;
+                        return;
+                    }
+                }
+
+                const stats = await checkUploadLimit();
+
+                showFeedbackStatus('uploadStatus', '上传中...', 'info');
+
+                const version = await getNextVersion();
+                const today = new Date().toISOString().split('T')[0];
+
+                const currentFiles = await getFilesList();
+                const newFiles = [];
+
+                for (const file of files) {
+                    const fileInfo = await uploadFileToRepo(file, version);
+
+                    newFiles.push({
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        username: currentUser.username,
+                        fileName: file.name,
+                        version: version,
+                        size: file.size,
+                        totalChunks: fileInfo.totalChunks,
+                        chunkSize: fileInfo.chunkSize,
+                        uploadedAt: new Date().toISOString()
+                    });
+
+                    if (!stats[currentUser.username]) {
+                        stats[currentUser.username] = {};
+                    }
+                    stats[currentUser.username][today] = (stats[currentUser.username][today] || 0) + 1;
+                }
+
+                const updatedFiles = [...currentFiles, ...newFiles];
+                await saveFilesList(updatedFiles);
+                await saveVersion(version);
+                await saveUploadStats(stats);
+
+                await refreshFileList();
+
+                const remaining = DAILY_UPLOAD_LIMIT - (stats[currentUser.username][today] || 0);
+                showFeedbackStatus('uploadStatus', `上传成功！版本: v${version}，今日剩余上传次数: ${remaining}`, 'success');
+
+            } catch (error) {
+                console.error('上传失败:', error);
+                showFeedbackStatus('uploadStatus', '上传失败: ' + error.message, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function handleRefresh() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.classList.add('loading');
+            refreshBtn.disabled = true;
+
+            try {
+                await refreshFileList();
+                showFeedbackStatus('uploadStatus', '刷新成功', 'success');
+            } catch (error) {
+                console.error('刷新失败:', error);
+                showFeedbackStatus('uploadStatus', '刷新失败: ' + error.message, 'error');
+            } finally {
+                refreshBtn.classList.remove('loading');
+                refreshBtn.disabled = false;
+            }
+        }
+
+        async function refreshFileList() {
+            const fileListContent = document.getElementById('fileListContent');
+            const fileCount = document.getElementById('fileCount');
+
+            try {
+                const files = await getFilesList();
+
+                if (files.length === 0) {
+                    fileListContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>暂无文件，上传一些文件开始使用</p>
+                        </div>
+                    `;
+                    fileCount.textContent = '0 个文件';
+                    return;
+                }
+
+                fileCount.textContent = `${files.length} 个文件`;
+
+                fileListContent.innerHTML = files.map(file => `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">${escapeHtml(file.fileName)}</div>
+                            <div class="file-meta">
+                                上传者: ${escapeHtml(file.username)} | 版本: v${file.version} | 大小: ${formatFileSize(file.size)}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="file-action-btn download-btn" onclick="downloadFile('${file.id}', '${escapeHtml(file.fileName)}', ${file.version})">
+                                <i class="fas fa-download"></i> 下载
+                            </button>
+                            ${file.username === currentUser?.username ? `<button class="file-action-btn delete-btn" onclick="deleteFile('${file.id}')">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('刷新文件列表失败:', error);
+                fileListContent.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>加载文件列表失败</p>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function downloadFile(fileId, fileName, version) {
+            const files = await getFilesList();
+            const fileInfo = files.find(f => f.id === fileId);
+            
+            if (!fileInfo) {
+                showFeedbackStatus('uploadStatus', '文件信息不存在', 'error');
+                return;
+            }
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn';
+            downloadBtn.style.cssText = 'display: none;';
+            document.body.appendChild(downloadBtn);
+
+            const modal = document.createElement('div');
+            modal.className = 'modal active';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 400px;">
+                    <div class="modal-header">
+                        <h2>下载 ${escapeHtml(fileName)}</h2>
+                        <button class="modal-close" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto';">&times;</button>
+                    </div>
+                    <div style="text-align: center; padding: 20px 0;">
+                        <p style="margin-bottom: 20px; color: var(--gray);">版本: v${version}</p>
+                        <div id="downloadProgress" style="display: none;">
+                            <div style="margin-bottom: 10px;">下载进度: <span id="progressText">0%</span></div>
+                            <div style="width: 100%; height: 20px; background: #eee; border-radius: 10px; overflow: hidden;">
+                                <div id="progressBar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+                        <button id="startDownload" class="btn" style="display: block; margin: 0 auto 15px; background-color: var(--primary);">
+                            <i class="fas fa-download"></i> 开始下载
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            document.body.style.overflow = 'hidden';
+
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    document.body.style.overflow = 'auto';
+                    downloadBtn.remove();
+                }
+            });
+
+            document.getElementById('startDownload').addEventListener('click', async () => {
+                const startBtn = document.getElementById('startDownload');
+                const progressDiv = document.getElementById('downloadProgress');
+                const progressText = document.getElementById('progressText');
+                const progressBar = document.getElementById('progressBar');
+
+                startBtn.style.display = 'none';
+                progressDiv.style.display = 'block';
+                progressText.textContent = '0%';
+                progressBar.style.width = '0%';
+
+                try {
+                    const mergedBuffer = await downloadAndMergeFile({
+                        originalName: fileName,
+                        totalChunks: fileInfo.totalChunks || 1,
+                        version: version
+                    });
+
+                    const blob = new Blob([mergedBuffer]);
+                    const url = URL.createObjectURL(blob);
+                    downloadBtn.href = url;
+                    downloadBtn.download = fileName;
+                    downloadBtn.click();
+                    URL.revokeObjectURL(url);
+
+                    showFeedbackStatus('uploadStatus', '下载成功', 'success');
+                } catch (error) {
+                    console.error('下载失败:', error);
+                    showFeedbackStatus('uploadStatus', '下载失败: ' + error.message, 'error');
+                } finally {
+                    modal.remove();
+                    document.body.style.overflow = 'auto';
+                    downloadBtn.remove();
+                }
+            });
+        }
+
+        async function deleteFile(fileId) {
+            if (!currentUser) {
+                showFeedbackStatus('uploadStatus', '请先登录', 'error');
+                return;
+            }
+
+            if (!confirm('确定要删除这个文件吗？')) return;
+
+            try {
+                const files = await getFilesList();
+                const fileToDelete = files.find(f => f.id === fileId);
+
+                if (!fileToDelete) {
+                    showFeedbackStatus('uploadStatus', '文件不存在', 'error');
+                    return;
+                }
+
+                if (fileToDelete.username !== currentUser.username) {
+                    showFeedbackStatus('uploadStatus', '只能删除自己上传的文件', 'error');
+                    return;
+                }
+
+                const apiKey = decodeApiKey();
+                const baseName = fileToDelete.fileName.replace(/\.[^/.]+$/, '');
+                const totalChunks = fileToDelete.totalChunks || 1;
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const chunkFileName = `v${fileToDelete.version}_${baseName}_chunk${i}.bin`;
+                    const filePath = `files/${chunkFileName}`;
+                    const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
+
+                    let sha = null;
+                    try {
+                        const existingResponse = await fetch(url, {
+                            headers: {
+                                'Authorization': `token ${apiKey}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        });
+                        if (existingResponse.ok) {
+                            const data = await existingResponse.json();
+                            sha = data.sha;
+                        }
+                    } catch (e) {}
+
+                    if (sha) {
+                        const response = await fetch(url, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `token ${apiKey}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: `删除文件分片: ${chunkFileName}`,
+                                sha: sha
+                            })
+                        });
+
+                        if (!response.ok) {
+                            console.warn(`删除分片 ${chunkFileName} 失败: ${response.status}`);
+                        }
+                    }
+                }
+
+                const updatedFiles = files.filter(f => f.id !== fileId);
+                await saveFilesList(updatedFiles);
+
+                await refreshFileList();
+                showFeedbackStatus('uploadStatus', '删除成功', 'success');
+
+            } catch (error) {
+                console.error('删除失败:', error);
+                showFeedbackStatus('uploadStatus', '删除失败: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
