@@ -900,6 +900,7 @@
         const ENCODED_API_KEY = "V分2分p分K分c分0分1分H分R分k分l分W分b分W分x分Z分T分T分B分K分b分1分p分F分W分T分R分l分R分T分F分W分U分2分s分5分V分F分Z分U分V分l分p分V分M分n分h分G分Z分D分F分a分S分W分J分6分U分l分Z分i分S分E分E分w分V分l分V分V分M分W分E分y分U分l分h分a分R分V分Z分Z分T分U分Z分a分S分1分Z分X分e分G分9分X分R0分5分W分V分W分x分K分U0分1分F分c分G分F分Z分M分V分Z分3分U分l分U分x分c分k分9分U分U分m分x分i分V分G分x分Z分W分V分d分w分Y分V分N分X分T分n分V分X分b分X分R分U分V分l分h分o分a分F分l分V分V分l分d分X分b分E5分W分Z分U分Z分k分U分m分J分H分a分D分N分a分R分V分J分h分V0分d分W分W分F分R分U分S分l分V分h分e分m分x分o分V分F分R分C分U1分Z分W分R分n分V分X分b分T分F分V分Y分m分x分a分R分F分R分s分V分m分t分k分Q分T0分9";
         const GITHUB_USERNAME = "dyz131005";
         const GITHUB_REPO = "drive";
+        const ACCOUNTS_REPO = "dyz131005.github.io";
         const ACCOUNTS_FILE = "accounts.yaml";
         const MESSAGES_FILE = "messages.yaml";
 
@@ -918,11 +919,11 @@
             }
         }
 
-        async function fetchYamlFile(filename) {
+        async function fetchYamlFile(filename, repo = GITHUB_REPO) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
 
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filename}`;
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${repo}/contents/${filename}`;
 
             const response = await fetch(url, {
                 headers: {
@@ -937,11 +938,11 @@
             return await response.text();
         }
 
-        async function saveYamlFile(filename, content, message = "更新文件") {
+        async function saveYamlFile(filename, content, message = "更新文件", repo = GITHUB_REPO) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
 
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filename}`;
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${repo}/contents/${filename}`;
 
             let sha = null;
             const existingResponse = await fetch(url, {
@@ -980,7 +981,7 @@
 
         async function loadAccounts() {
             try {
-                const yamlContent = await fetchYamlFile(ACCOUNTS_FILE);
+                const yamlContent = await fetchYamlFile(ACCOUNTS_FILE, ACCOUNTS_REPO);
                 if (!yamlContent) return {};
                 return jsyaml.load(yamlContent) || {};
             } catch (error) {
@@ -1004,7 +1005,7 @@
             };
 
             const yamlContent = jsyaml.dump(accounts);
-            await saveYamlFile(ACCOUNTS_FILE, yamlContent, `新用户注册: ${username}`);
+            await saveYamlFile(ACCOUNTS_FILE, yamlContent, `新用户注册: ${username}`, ACCOUNTS_REPO);
 
             return accounts[username];
         }
@@ -1372,30 +1373,269 @@
             } catch (e) {}
         }
 
-        async function uploadFileToRelease(releaseId, file, version) {
+        const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+        const CHUNK_SIZE = 25 * 1024 * 1024;
+        const DAILY_UPLOAD_LIMIT = 30;
+
+        async function uploadChunkToRepo(chunkData, version, fileName, chunkIndex, totalChunks) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
 
-            const fileNameWithVersion = `v${version}_${file.name}`;
-            const url = `https://uploads.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/releases/${releaseId}/assets`;
+            const baseName = fileName.replace(/\.[^/.]+$/, '');
+            const extName = fileName.split('.').pop() || 'bin';
+            const chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
+            const filePath = `files/${chunkFileName}`;
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
 
-            const arrayBuffer = await file.arrayBuffer();
+            const base64Content = btoa(String.fromCharCode(...new Uint8Array(chunkData)));
 
-            const response = await fetch(`${url}?name=${encodeURIComponent(fileNameWithVersion)}`, {
-                method: 'POST',
+            let sha = null;
+            try {
+                const existingResponse = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (existingResponse.ok) {
+                    const data = await existingResponse.json();
+                    sha = data.sha;
+                }
+            } catch (e) {}
+
+            const requestBody = {
+                message: `上传文件分片: ${chunkFileName} (${chunkIndex + 1}/${totalChunks})`,
+                content: base64Content
+            };
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
                 headers: {
                     'Authorization': `token ${apiKey}`,
-                    'Content-Type': 'application/octet-stream'
+                    'Content-Type': 'application/json'
                 },
-                body: arrayBuffer
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`上传文件失败: ${response.status} - ${errorText}`);
+                throw new Error(`上传分片失败: ${response.status} - ${errorText}`);
             }
 
             return await response.json();
+        }
+
+        async function uploadFileInChunks(file, version) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const arrayBuffer = await file.arrayBuffer();
+            const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
+            const fileInfo = {
+                originalName: file.name,
+                size: file.size,
+                totalChunks: totalChunks,
+                chunkSize: CHUNK_SIZE,
+                uploadedAt: new Date().toISOString()
+            };
+
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
+                const chunkData = arrayBuffer.slice(start, end);
+                await uploadChunkToRepo(chunkData, version, file.name, i, totalChunks);
+            }
+
+            return fileInfo;
+        }
+
+        async function downloadChunk(version, fileName, chunkIndex) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const baseName = fileName.replace(/\.[^/.]+$/, '');
+            const chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3.raw'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`下载分片失败: ${response.status}`);
+            }
+
+            return await response.arrayBuffer();
+        }
+
+        async function downloadAndMergeFile(fileInfo) {
+            const { originalName, totalChunks, version } = fileInfo;
+            const chunks = [];
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunkData = await downloadChunk(version, originalName, i);
+                chunks.push(new Uint8Array(chunkData));
+            }
+
+            const totalSize = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+            const mergedBuffer = new Uint8Array(totalSize);
+            let offset = 0;
+            for (const chunk of chunks) {
+                mergedBuffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            return mergedBuffer;
+        }
+
+        async function uploadFileToRepo(file, version) {
+            if (file.size <= CHUNK_SIZE) {
+                const apiKey = decodeApiKey();
+                if (!apiKey) throw new Error("API Key解码失败");
+
+                const baseName = file.name.replace(/\.[^/.]+$/, '');
+                const extName = file.name.split('.').pop() || 'bin';
+                const fileNameWithVersion = `v${version}_${baseName}.bin`;
+                const filePath = `files/${fileNameWithVersion}`;
+                const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
+
+                const arrayBuffer = await file.arrayBuffer();
+                const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+                let sha = null;
+                try {
+                    const existingResponse = await fetch(url, {
+                        headers: {
+                            'Authorization': `token ${apiKey}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    if (existingResponse.ok) {
+                        const data = await existingResponse.json();
+                        sha = data.sha;
+                    }
+                } catch (e) {}
+
+                const requestBody = {
+                    message: `上传文件: ${fileNameWithVersion}`,
+                    content: base64Content
+                };
+                if (sha) requestBody.sha = sha;
+
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`上传文件失败: ${response.status} - ${errorText}`);
+                }
+
+                return {
+                    originalName: file.name,
+                    size: file.size,
+                    totalChunks: 1,
+                    chunkSize: file.size,
+                    uploadedAt: new Date().toISOString()
+                };
+            } else {
+                return await uploadFileInChunks(file, version);
+            }
+        }
+
+        async function getUploadStats() {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/upload_stats.yaml`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
+                });
+
+                if (response.status === 404) {
+                    return {};
+                }
+
+                if (!response.ok) throw new Error(`获取上传统计失败: ${response.status}`);
+
+                const content = await response.text();
+                return jsyaml.load(content) || {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        async function saveUploadStats(stats) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/upload_stats.yaml`;
+
+            let sha = null;
+            try {
+                const existingResponse = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (existingResponse.ok) {
+                    const data = await existingResponse.json();
+                    sha = data.sha;
+                }
+            } catch (e) {}
+
+            const content = jsyaml.dump(stats);
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+
+            const requestBody = {
+                message: "更新上传统计",
+                content: base64Content
+            };
+            if (sha) requestBody.sha = sha;
+
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(`保存上传统计失败: ${response.status}`);
+            return await response.json();
+        }
+
+        async function checkUploadLimit() {
+            const stats = await getUploadStats();
+            const today = new Date().toISOString().split('T')[0];
+
+            if (!stats[currentUser.username]) {
+                stats[currentUser.username] = {};
+            }
+
+            if (stats[currentUser.username][today]) {
+                if (stats[currentUser.username][today] >= DAILY_UPLOAD_LIMIT) {
+                    throw new Error(`今日上传次数已达上限（${DAILY_UPLOAD_LIMIT}次），请明天再试`);
+                }
+            }
+
+            return stats;
         }
 
         async function handleFiles(files) {
@@ -1406,19 +1646,28 @@
 
             const uploadBtn = document.querySelector('.upload-btn');
             uploadBtn.disabled = true;
-            showFeedbackStatus('uploadStatus', '上传中...', 'info');
 
             try {
-                const version = await getNextVersion();
-                const tagName = `v${version}`;
+                for (const file of files) {
+                    if (file.size > MAX_FILE_SIZE) {
+                        showFeedbackStatus('uploadStatus', `文件 ${file.name} 超过大小限制（最大1024MB）`, 'error');
+                        uploadBtn.disabled = false;
+                        return;
+                    }
+                }
 
-                const release = await createReleaseWithTag(tagName, files[0].name);
+                const stats = await checkUploadLimit();
+
+                showFeedbackStatus('uploadStatus', '上传中...', 'info');
+
+                const version = await getNextVersion();
+                const today = new Date().toISOString().split('T')[0];
 
                 const currentFiles = await getFilesList();
                 const newFiles = [];
 
                 for (const file of files) {
-                    await uploadFileToRelease(release.id, file, version);
+                    const fileInfo = await uploadFileToRepo(file, version);
 
                     newFiles.push({
                         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -1426,17 +1675,26 @@
                         fileName: file.name,
                         version: version,
                         size: file.size,
+                        totalChunks: fileInfo.totalChunks,
+                        chunkSize: fileInfo.chunkSize,
                         uploadedAt: new Date().toISOString()
                     });
+
+                    if (!stats[currentUser.username]) {
+                        stats[currentUser.username] = {};
+                    }
+                    stats[currentUser.username][today] = (stats[currentUser.username][today] || 0) + 1;
                 }
 
                 const updatedFiles = [...currentFiles, ...newFiles];
                 await saveFilesList(updatedFiles);
                 await saveVersion(version);
+                await saveUploadStats(stats);
 
                 await refreshFileList();
 
-                showFeedbackStatus('uploadStatus', `上传成功！版本: v${version}`, 'success');
+                const remaining = DAILY_UPLOAD_LIMIT - (stats[currentUser.username][today] || 0);
+                showFeedbackStatus('uploadStatus', `上传成功！版本: v${version}，今日剩余上传次数: ${remaining}`, 'success');
 
             } catch (error) {
                 console.error('上传失败:', error);
@@ -1530,10 +1788,19 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        function downloadFile(fileId, fileName, version) {
-            const fileNameWithVersion = `v${version}_${fileName}`;
-            const normalUrl = `https://github.com/${GITHUB_USERNAME}/${GITHUB_REPO}/releases/download/v${version}/${encodeURIComponent(fileNameWithVersion)}`;
-            const fastUrl = `https://ghproxy.homeboyc.cn/https://github.com/${GITHUB_USERNAME}/${GITHUB_REPO}/releases/download/v${version}/${encodeURIComponent(fileNameWithVersion)}`;
+        async function downloadFile(fileId, fileName, version) {
+            const files = await getFilesList();
+            const fileInfo = files.find(f => f.id === fileId);
+            
+            if (!fileInfo) {
+                showFeedbackStatus('uploadStatus', '文件信息不存在', 'error');
+                return;
+            }
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn';
+            downloadBtn.style.cssText = 'display: none;';
+            document.body.appendChild(downloadBtn);
 
             const modal = document.createElement('div');
             modal.className = 'modal active';
@@ -1545,23 +1812,65 @@
                     </div>
                     <div style="text-align: center; padding: 20px 0;">
                         <p style="margin-bottom: 20px; color: var(--gray);">版本: v${version}</p>
-                        <a href="${normalUrl}" target="_blank" class="btn" style="display: block; margin-bottom: 15px; background-color: var(--primary);">
-                            <i class="fas fa-download"></i> 普通下载
-                        </a>
-                        <a href="${fastUrl}" target="_blank" class="btn" style="display: block; background-color: var(--success);">
-                            <i class="fas fa-bolt"></i> 高速下载
-                        </a>
+                        <div id="downloadProgress" style="display: none;">
+                            <div style="margin-bottom: 10px;">下载进度: <span id="progressText">0%</span></div>
+                            <div style="width: 100%; height: 20px; background: #eee; border-radius: 10px; overflow: hidden;">
+                                <div id="progressBar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+                        <button id="startDownload" class="btn" style="display: block; margin: 0 auto 15px; background-color: var(--primary);">
+                            <i class="fas fa-download"></i> 开始下载
+                        </button>
                     </div>
                 </div>
             `;
+
+            document.body.appendChild(modal);
+            document.body.style.overflow = 'hidden';
+
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.remove();
                     document.body.style.overflow = 'auto';
+                    downloadBtn.remove();
                 }
             });
-            document.body.appendChild(modal);
-            document.body.style.overflow = 'hidden';
+
+            document.getElementById('startDownload').addEventListener('click', async () => {
+                const startBtn = document.getElementById('startDownload');
+                const progressDiv = document.getElementById('downloadProgress');
+                const progressText = document.getElementById('progressText');
+                const progressBar = document.getElementById('progressBar');
+
+                startBtn.style.display = 'none';
+                progressDiv.style.display = 'block';
+                progressText.textContent = '0%';
+                progressBar.style.width = '0%';
+
+                try {
+                    const mergedBuffer = await downloadAndMergeFile({
+                        originalName: fileName,
+                        totalChunks: fileInfo.totalChunks || 1,
+                        version: version
+                    });
+
+                    const blob = new Blob([mergedBuffer]);
+                    const url = URL.createObjectURL(blob);
+                    downloadBtn.href = url;
+                    downloadBtn.download = fileName;
+                    downloadBtn.click();
+                    URL.revokeObjectURL(url);
+
+                    showFeedbackStatus('uploadStatus', '下载成功', 'success');
+                } catch (error) {
+                    console.error('下载失败:', error);
+                    showFeedbackStatus('uploadStatus', '下载失败: ' + error.message, 'error');
+                } finally {
+                    modal.remove();
+                    document.body.style.overflow = 'auto';
+                    downloadBtn.remove();
+                }
+            });
         }
 
         async function deleteFile(fileId) {
@@ -1584,6 +1893,48 @@
                 if (fileToDelete.username !== currentUser.username) {
                     showFeedbackStatus('uploadStatus', '只能删除自己上传的文件', 'error');
                     return;
+                }
+
+                const apiKey = decodeApiKey();
+                const baseName = fileToDelete.fileName.replace(/\.[^/.]+$/, '');
+                const totalChunks = fileToDelete.totalChunks || 1;
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const chunkFileName = `v${fileToDelete.version}_${baseName}_chunk${i}.bin`;
+                    const filePath = `files/${chunkFileName}`;
+                    const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
+
+                    let sha = null;
+                    try {
+                        const existingResponse = await fetch(url, {
+                            headers: {
+                                'Authorization': `token ${apiKey}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        });
+                        if (existingResponse.ok) {
+                            const data = await existingResponse.json();
+                            sha = data.sha;
+                        }
+                    } catch (e) {}
+
+                    if (sha) {
+                        const response = await fetch(url, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `token ${apiKey}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: `删除文件分片: ${chunkFileName}`,
+                                sha: sha
+                            })
+                        });
+
+                        if (!response.ok) {
+                            console.warn(`删除分片 ${chunkFileName} 失败: ${response.status}`);
+                        }
+                    }
                 }
 
                 const updatedFiles = files.filter(f => f.id !== fileId);
