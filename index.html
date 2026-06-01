@@ -1373,7 +1373,19 @@
             } catch (e) {}
         }
 
-        const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+        function arrayBufferToBase64(buffer) {
+            const binary = [];
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 1024 * 1024;
+            
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const end = Math.min(i + chunkSize, bytes.length);
+                const chunk = bytes.subarray(i, end);
+                binary.push(String.fromCharCode(...chunk));
+            }
+            
+            return btoa(binary.join(''));
+        }
         const CHUNK_SIZE = 25 * 1024 * 1024;
         const DAILY_UPLOAD_LIMIT = 30;
 
@@ -1387,7 +1399,7 @@
             const filePath = `files/${chunkFileName}`;
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
 
-            const base64Content = btoa(String.fromCharCode(...new Uint8Array(chunkData)));
+            const base64Content = arrayBufferToBase64(chunkData);
 
             let sha = null;
             try {
@@ -1450,12 +1462,17 @@
             return fileInfo;
         }
 
-        async function downloadChunk(version, fileName, chunkIndex) {
+        async function downloadChunk(version, fileName, chunkIndex, totalChunks = 1) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
 
             const baseName = fileName.replace(/\.[^/.]+$/, '');
-            const chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
+            let chunkFileName;
+            if (totalChunks === 1) {
+                chunkFileName = `v${version}_${baseName}.bin`;
+            } else {
+                chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
+            }
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
 
             const response = await fetch(url, {
@@ -1477,7 +1494,7 @@
             const chunks = [];
 
             for (let i = 0; i < totalChunks; i++) {
-                const chunkData = await downloadChunk(version, originalName, i);
+                const chunkData = await downloadChunk(version, originalName, i, totalChunks);
                 chunks.push(new Uint8Array(chunkData));
             }
 
@@ -1504,7 +1521,7 @@
                 const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
 
                 const arrayBuffer = await file.arrayBuffer();
-                const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                const base64Content = arrayBufferToBase64(arrayBuffer);
 
                 let sha = null;
                 try {
@@ -1743,9 +1760,6 @@
 
                 fileListContent.innerHTML = files.map(file => `
                     <div class="file-item">
-                        <div class="file-icon">
-                            <i class="fas fa-file"></i>
-                        </div>
                         <div class="file-info">
                             <div class="file-name">${escapeHtml(file.fileName)}</div>
                             <div class="file-meta">
@@ -1756,9 +1770,9 @@
                             <button class="file-action-btn download-btn" onclick="downloadFile('${file.id}', '${escapeHtml(file.fileName)}', ${file.version})">
                                 <i class="fas fa-download"></i> 下载
                             </button>
-                            <button class="file-action-btn delete-btn" onclick="deleteFile('${file.id}')">
+                            ${file.username === currentUser?.username ? `<button class="file-action-btn delete-btn" onclick="deleteFile('${file.id}')">
                                 <i class="fas fa-trash"></i> 删除
-                            </button>
+                            </button>` : ''}
                         </div>
                     </div>
                 `).join('');
