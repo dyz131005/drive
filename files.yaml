@@ -7,3 +7,11 @@ files:
     totalChunks: 2
     chunkSize: 26214400
     uploadedAt: '2026-06-01T04:07:56.249Z'
+  - id: 1781523497754aqkx9s6sb
+    username: dyz
+    fileName: BOOTX64.EFI
+    version: 2
+    size: 15872
+    totalChunks: 1
+    chunkSize: 15872
+    uploadedAt: '2026-06-15T11:38:17.754Z'
