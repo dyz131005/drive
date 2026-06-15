@@ -1539,23 +1539,20 @@
 
             const fileInfo = await infoResponse.json();
             
-            let downloadUrl;
-            if (fileInfo.download_url) {
-                downloadUrl = fileInfo.download_url;
-            } else if (fileInfo.size <= 1024 * 1024 && fileInfo.content) {
+            if (fileInfo.size <= 1024 * 1024 && fileInfo.content) {
                 const binaryString = atob(fileInfo.content);
                 const bytes = new Uint8Array(binaryString.length);
                 for (let i = 0; i < binaryString.length; i++) {
                     bytes[i] = binaryString.charCodeAt(i);
                 }
                 return bytes.buffer;
-            } else {
-                downloadUrl = `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/main/files/${chunkFileName}`;
             }
 
+            const downloadUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
             const downloadResponse = await fetch(downloadUrl, {
                 headers: {
-                    'Authorization': `token ${apiKey}`
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3.raw'
                 }
             });
 
