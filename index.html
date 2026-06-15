@@ -1524,20 +1524,46 @@
             } else {
                 chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
             }
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
 
-            const response = await fetch(url, {
+            const infoResponse = await fetch(apiUrl, {
                 headers: {
                     'Authorization': `token ${apiKey}`,
-                    'Accept': 'application/vnd.github.v3.raw'
+                    'Accept': 'application/vnd.github.v3+json'
                 }
             });
 
-            if (!response.ok) {
-                throw new Error(`下载分片失败: ${response.status}`);
+            if (!infoResponse.ok) {
+                throw new Error(`获取文件信息失败: ${infoResponse.status}`);
             }
 
-            return await response.arrayBuffer();
+            const fileInfo = await infoResponse.json();
+            
+            let downloadUrl;
+            if (fileInfo.download_url) {
+                downloadUrl = fileInfo.download_url;
+            } else if (fileInfo.size <= 1024 * 1024 && fileInfo.content) {
+                const binaryString = atob(fileInfo.content);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            } else {
+                downloadUrl = `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/main/files/${chunkFileName}`;
+            }
+
+            const downloadResponse = await fetch(downloadUrl, {
+                headers: {
+                    'Authorization': `token ${apiKey}`
+                }
+            });
+
+            if (!downloadResponse.ok) {
+                throw new Error(`下载分片失败: ${downloadResponse.status}`);
+            }
+
+            return await downloadResponse.arrayBuffer();
         }
 
         async function downloadAndMergeFile(fileInfo) {
