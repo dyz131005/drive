@@ -924,18 +924,51 @@
             if (!apiKey) throw new Error("API Key解码失败");
 
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${repo}/contents/${filename}`;
+            console.log(`获取文件: ${url}`);
 
             const response = await fetch(url, {
                 headers: {
                     'Authorization': `token ${apiKey}`,
-                    'Accept': 'application/vnd.github.v3.raw'
+                    'Accept': 'application/vnd.github.v3+json'
                 }
             });
 
-            if (response.status === 404) return null;
-            if (!response.ok) throw new Error(`获取${filename}失败: ${response.status}`);
+            console.log(`响应状态: ${response.status}`);
 
-            return await response.text();
+            if (response.status === 404) {
+                console.log('文件不存在，返回null');
+                return null;
+            }
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`获取${filename}失败: ${response.status}`, errorText);
+                throw new Error(`获取${filename}失败: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('响应数据类型:', data.type, '编码:', data.encoding);
+            
+            if (data.encoding === 'base64' && data.content) {
+                const decoded = atob(data.content.replace(/\n/g, ''));
+                console.log('成功解码base64内容，长度:', decoded.length);
+                return decoded;
+            }
+            
+            if (data.download_url) {
+                console.log('使用download_url获取内容');
+                const rawResponse = await fetch(data.download_url, {
+                    headers: {
+                        'Authorization': `token ${apiKey}`
+                    }
+                });
+                if (rawResponse.ok) {
+                    const text = await rawResponse.text();
+                    console.log('成功获取原始内容，长度:', text.length);
+                    return text;
+                }
+            }
+            
+            throw new Error(`无法解析${filename}的内容`);
         }
 
         async function saveYamlFile(filename, content, message = "更新文件", repo = GITHUB_REPO) {
@@ -982,8 +1015,14 @@
         async function loadAccounts() {
             try {
                 const yamlContent = await fetchYamlFile(ACCOUNTS_FILE, ACCOUNTS_REPO);
-                if (!yamlContent) return {};
-                return jsyaml.load(yamlContent) || {};
+                if (!yamlContent || yamlContent.trim() === '') return {};
+                try {
+                    const parsed = jsyaml.load(yamlContent);
+                    return parsed || {};
+                } catch (parseError) {
+                    console.error("解析账户YAML失败:", parseError);
+                    return {};
+                }
             } catch (error) {
                 console.error("加载账户失败:", error);
                 return {};
