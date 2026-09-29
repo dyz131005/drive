@@ -275,6 +275,46 @@
             transform: translateY(-2px);
         }
 
+        .upload-progress {
+            display: none;
+            margin-top: 20px;
+            text-align: left;
+            background: var(--light);
+            border-radius: 8px;
+            padding: 15px 20px;
+            border: 1px solid var(--gray-light);
+        }
+
+        .upload-progress .progress-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--dark);
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .upload-progress .progress-track {
+            width: 100%;
+            height: 18px;
+            background: #e5e7eb;
+            border-radius: 9px;
+            overflow: hidden;
+        }
+
+        .upload-progress .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 9px;
+            transition: width 0.3s ease;
+        }
+
+        .upload-progress .progress-text {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 6px;
+        }
+
         .file-input {
             display: none;
         }
@@ -811,6 +851,13 @@
                                 <i class="fas fa-plus"></i> 选择文件
                             </button>
                             <input type="file" id="fileInput" class="file-input" multiple>
+                            <div class="upload-progress" id="uploadProgressWrap">
+                                <div class="progress-name" id="uploadProgressName"></div>
+                                <div class="progress-track">
+                                    <div class="progress-fill" id="uploadProgressBar"></div>
+                                </div>
+                                <div class="progress-text" id="uploadProgressText"></div>
+                            </div>
                         </div>
 
                         <div class="file-list">
@@ -945,11 +992,21 @@
                 throw new Error(`获取${filename}失败: ${response.status}`);
             }
 
+            // GitHub 对部分文件会直接返回 raw 文本（Content-Type: vnd.github.v3.raw），需双形态兼容
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('raw')) {
+                const rawText = await response.text();
+                console.log('GitHub直接返回raw文本，长度:', rawText.length);
+                return rawText;
+            }
+
             const data = await response.json();
             console.log('响应数据类型:', data.type, '编码:', data.encoding);
             
             if (data.encoding === 'base64' && data.content) {
-                const decoded = atob(data.content.replace(/\n/g, ''));
+                const binary = atob(data.content.replace(/\n/g, ''));
+                const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+                const decoded = new TextDecoder().decode(bytes);
                 console.log('成功解码base64内容，长度:', decoded.length);
                 return decoded;
             }
@@ -1312,6 +1369,80 @@
             }
         }
 
+        // 只返回当前登录用户自己的文件
+        async function getMyFiles() {
+            if (!currentUser) return [];
+            const allFiles = await getFilesList();
+            return allFiles.filter(f => f.username === currentUser.username);
+        }
+
+        // 用于把字符串安全地嵌入 onclick 单引号属性
+        function jsString(value) {
+            return String(value)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\r/g, '\\r')
+                .replace(/\n/g, '\\n');
+        }
+
+        // 根据文件条目重建服务器上的存储文件名（旧数据没有 storedChunks 时使用）
+        function buildChunkStoredName(fileInfo, chunkIndex) {
+            const baseName = (fileInfo.fileName || '').replace(/\.[^/.]+$/, '');
+            if ((fileInfo.totalChunks || 1) === 1) {
+                return `v${fileInfo.version}_${baseName}.bin`;
+            }
+            return `v${fileInfo.version}_${baseName}_chunk${chunkIndex}.bin`;
+        }
+
+        // 计算 git blob SHA（GitHub contents API 返回的 sha 即该值）
+        async function computeGitBlobSha(buffer) {
+            const bytes = new Uint8Array(buffer);
+            const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+            const combined = new Uint8Array(header.length + bytes.length);
+            combined.set(header, 0);
+            combined.set(bytes, header.length);
+            const digest = await crypto.subtle.digest('SHA-1', combined);
+            return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // 真实请求服务器验证文件确实存在且内容完整；通过返回 true，否则抛错
+        async function verifyChunkOnServer(storedName, expectedSize, expectedBuffer) {
+            const apiKey = decodeApiKey();
+            if (!apiKey) throw new Error("API Key解码失败");
+
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${encodeURIComponent(storedName)}`;
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `token ${apiKey}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                cache: 'no-store'
+            });
+
+            if (!response.ok) throw new Error(`验证失败: 服务器返回状态码 ${response.status}`);
+
+            const data = await response.json();
+            if (data.type !== 'file') throw new Error(`验证失败: 服务器上未找到文件 ${storedName}`);
+            if (data.size !== expectedSize) {
+                throw new Error(`验证失败: 文件大小不符（服务器 ${data.size} 字节 / 本地 ${expectedSize} 字节）`);
+            }
+
+            if (typeof crypto !== 'undefined' && crypto.subtle) {
+                try {
+                    const expectedSha = await computeGitBlobSha(expectedBuffer);
+                    if (expectedSha !== data.sha) {
+                        throw new Error('验证失败: 内容校验和不符，服务器可能未完整写入');
+                    }
+                } catch (e) {
+                    if (e instanceof Error && e.message && e.message.indexOf('验证失败') === 0) throw e;
+                    // 计算校验和不可用（如非安全上下文）时，仅依赖存在性 + 大小校验
+                }
+            }
+
+            return true;
+        }
+
         function base64Encode(str) {
             const bytes = new TextEncoder().encode(str);
             let binary = '';
@@ -1486,7 +1617,7 @@
             const baseName = fileName.replace(/\.[^/.]+$/, '');
             const extName = fileName.split('.').pop() || 'bin';
             const chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
-            const filePath = `files/${chunkFileName}`;
+            const filePath = `files/${encodeURIComponent(chunkFileName)}`;
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
 
             const base64Content = arrayBufferToBase64(chunkData);
@@ -1528,7 +1659,7 @@
             return await response.json();
         }
 
-        async function uploadFileInChunks(file, version) {
+        async function uploadFileInChunks(file, version, onPhase) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
 
@@ -1542,28 +1673,36 @@
                 uploadedAt: new Date().toISOString()
             };
 
+            const baseName = file.name.replace(/\.[^/.]+$/, '');
+            const storedNames = [];
+            const uploadedChunks = [];
+
             for (let i = 0; i < totalChunks; i++) {
                 const start = i * CHUNK_SIZE;
                 const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
                 const chunkData = arrayBuffer.slice(start, end);
-                await uploadChunkToRepo(chunkData, version, file.name, i, totalChunks);
+                const chunkFileName = `v${version}_${baseName}_chunk${i}.bin`;
+                storedNames.push(chunkFileName);
+                uploadedChunks.push(chunkData);
+                await uploadChunkToRepo(chunkData, version, baseName, i, totalChunks);
+                if (onPhase) onPhase({ type: 'transfer', bytes: chunkData.byteLength });
             }
 
+            if (onPhase) onPhase({ type: 'verify' });
+            for (let i = 0; i < totalChunks; i++) {
+                await verifyChunkOnServer(storedNames[i], uploadedChunks[i].byteLength, uploadedChunks[i]);
+            }
+            if (onPhase) onPhase({ type: 'verified', bytes: file.size });
+
+            fileInfo.storedChunks = storedNames;
             return fileInfo;
         }
 
-        async function downloadChunk(version, fileName, chunkIndex, totalChunks = 1) {
+        async function downloadChunk(storedName) {
             const apiKey = decodeApiKey();
             if (!apiKey) throw new Error("API Key解码失败");
 
-            const baseName = fileName.replace(/\.[^/.]+$/, '');
-            let chunkFileName;
-            if (totalChunks === 1) {
-                chunkFileName = `v${version}_${baseName}.bin`;
-            } else {
-                chunkFileName = `v${version}_${baseName}_chunk${chunkIndex}.bin`;
-            }
-            const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${encodeURIComponent(storedName)}`;
 
             const infoResponse = await fetch(apiUrl, {
                 headers: {
@@ -1577,9 +1716,19 @@
             }
 
             const fileInfo = await infoResponse.json();
-            
-            if (fileInfo.size <= 1024 * 1024 && fileInfo.content) {
-                const binaryString = atob(fileInfo.content);
+
+            if (fileInfo.type !== 'file') {
+                throw new Error('服务器返回的不是文件');
+            }
+
+            // 0字节空文件：直接返回空缓冲（GitHub 的 raw 请求对空文件会返回 JSON 元数据）
+            if (fileInfo.size === 0) {
+                return new ArrayBuffer(0);
+            }
+
+            // 小文件：解码 base64 content
+            if (fileInfo.content) {
+                const binaryString = atob(fileInfo.content.replace(/\n/g, ''));
                 const bytes = new Uint8Array(binaryString.length);
                 for (let i = 0; i < binaryString.length; i++) {
                     bytes[i] = binaryString.charCodeAt(i);
@@ -1587,31 +1736,48 @@
                 return bytes.buffer;
             }
 
-            const downloadUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/files/${chunkFileName}`;
-            const downloadResponse = await fetch(downloadUrl, {
+            // 大文件：contents API 的 raw 对 >1MB 文件会返回 JSON 元数据，改用 git blobs API 的 raw 媒体类型拉取
+            if (!fileInfo.sha) {
+                throw new Error('无法获取文件的 blob SHA');
+            }
+
+            const blobUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/git/blobs/${fileInfo.sha}`;
+            const blobResponse = await fetch(blobUrl, {
                 headers: {
                     'Authorization': `token ${apiKey}`,
                     'Accept': 'application/vnd.github.v3.raw'
                 }
             });
 
-            if (!downloadResponse.ok) {
-                throw new Error(`下载分片失败: ${downloadResponse.status}`);
+            if (!blobResponse.ok) {
+                throw new Error(`下载文件失败: ${blobResponse.status}`);
             }
 
-            return await downloadResponse.arrayBuffer();
+            const contentType = blobResponse.headers.get('content-type') || '';
+            if (contentType.indexOf('application/json') !== -1) {
+                throw new Error('服务器返回了 JSON 元数据而非文件内容，请重试');
+            }
+
+            return await blobResponse.arrayBuffer();
         }
 
         async function downloadAndMergeFile(fileInfo) {
-            const { originalName, totalChunks, version } = fileInfo;
+            const storedChunks = fileInfo.storedChunks || [];
+            const totalChunks = fileInfo.totalChunks || 1;
             const chunks = [];
 
             for (let i = 0; i < totalChunks; i++) {
-                const chunkData = await downloadChunk(version, originalName, i, totalChunks);
+                const storedName = storedChunks[i] || buildChunkStoredName(fileInfo, i);
+                const chunkData = await downloadChunk(storedName);
                 chunks.push(new Uint8Array(chunkData));
             }
 
             const totalSize = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+
+            if (fileInfo.size != null && totalSize !== fileInfo.size) {
+                throw new Error(`下载文件不完整: 预期 ${fileInfo.size} 字节，实际 ${totalSize} 字节`);
+            }
+
             const mergedBuffer = new Uint8Array(totalSize);
             let offset = 0;
             for (const chunk of chunks) {
@@ -1622,15 +1788,14 @@
             return mergedBuffer;
         }
 
-        async function uploadFileToRepo(file, version) {
+        async function uploadFileToRepo(file, version, onPhase) {
             if (file.size <= CHUNK_SIZE) {
                 const apiKey = decodeApiKey();
                 if (!apiKey) throw new Error("API Key解码失败");
 
                 const baseName = file.name.replace(/\.[^/.]+$/, '');
-                const extName = file.name.split('.').pop() || 'bin';
-                const fileNameWithVersion = `v${version}_${baseName}.bin`;
-                const filePath = `files/${fileNameWithVersion}`;
+                const storedName = `v${version}_${baseName}.bin`;
+                const filePath = `files/${encodeURIComponent(storedName)}`;
                 const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
 
                 const arrayBuffer = await file.arrayBuffer();
@@ -1651,7 +1816,7 @@
                 } catch (e) {}
 
                 const requestBody = {
-                    message: `上传文件: ${fileNameWithVersion}`,
+                    message: `上传文件: ${storedName}`,
                     content: base64Content
                 };
                 if (sha) requestBody.sha = sha;
@@ -1670,15 +1835,21 @@
                     throw new Error(`上传文件失败: ${response.status} - ${errorText}`);
                 }
 
+                if (onPhase) onPhase({ type: 'transfer', bytes: file.size });
+                if (onPhase) onPhase({ type: 'verify' });
+                await verifyChunkOnServer(storedName, file.size, arrayBuffer);
+                if (onPhase) onPhase({ type: 'verified', bytes: file.size });
+
                 return {
                     originalName: file.name,
                     size: file.size,
                     totalChunks: 1,
                     chunkSize: file.size,
-                    uploadedAt: new Date().toISOString()
+                    uploadedAt: new Date().toISOString(),
+                    storedChunks: [storedName]
                 };
             } else {
-                return await uploadFileInChunks(file, version);
+                return await uploadFileInChunks(file, version, onPhase);
             }
         }
 
@@ -1777,6 +1948,11 @@
             const uploadBtn = document.querySelector('.upload-btn');
             uploadBtn.disabled = true;
 
+            const progressWrap = document.getElementById('uploadProgressWrap');
+            const progressName = document.getElementById('uploadProgressName');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const progressText = document.getElementById('uploadProgressText');
+
             try {
                 for (const file of files) {
                     if (file.size > MAX_FILE_SIZE) {
@@ -1796,8 +1972,36 @@
                 const currentFiles = await getFilesList();
                 const newFiles = [];
 
-                for (const file of files) {
-                    const fileInfo = await uploadFileToRepo(file, version);
+                const fileArray = Array.from(files);
+                const totalDenom = fileArray.reduce((acc, f) => acc + Math.max(f.size, 1), 0);
+                let doneBytes = 0;
+                let verifiedBytes = 0;
+
+                progressWrap.style.display = 'block';
+                progressBar.style.width = '0%';
+                progressText.textContent = '准备上传...';
+
+                const updateProgress = (label) => {
+                    const transfer = (doneBytes / totalDenom) * 90;
+                    const verify = (verifiedBytes / totalDenom) * 10;
+                    const pct = Math.min(100, transfer + verify);
+                    progressBar.style.width = pct + '%';
+                    progressText.textContent = label || Math.floor(pct) + '%';
+                };
+
+                for (const file of fileArray) {
+                    progressName.textContent = file.name;
+                    const fileInfo = await uploadFileToRepo(file, version, (phase) => {
+                        if (phase.type === 'transfer') {
+                            doneBytes += Math.max(phase.bytes, 1);
+                            updateProgress();
+                        } else if (phase.type === 'verify') {
+                            updateProgress('上传完成，正在验证服务器上的文件...');
+                        } else if (phase.type === 'verified') {
+                            verifiedBytes += Math.max(phase.bytes, 1);
+                            updateProgress();
+                        }
+                    });
 
                     newFiles.push({
                         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -1807,7 +2011,8 @@
                         size: file.size,
                         totalChunks: fileInfo.totalChunks,
                         chunkSize: fileInfo.chunkSize,
-                        uploadedAt: new Date().toISOString()
+                        uploadedAt: new Date().toISOString(),
+                        storedChunks: fileInfo.storedChunks
                     });
 
                     if (!stats[currentUser.username]) {
@@ -1821,6 +2026,9 @@
                 await saveVersion(version);
                 await saveUploadStats(stats);
 
+                progressBar.style.width = '100%';
+                progressText.textContent = '上传完成，文件已确认存在于服务器';
+
                 await refreshFileList();
 
                 const remaining = DAILY_UPLOAD_LIMIT - (stats[currentUser.username][today] || 0);
@@ -1828,6 +2036,7 @@
 
             } catch (error) {
                 console.error('上传失败:', error);
+                progressText.textContent = '上传失败: ' + error.message;
                 showFeedbackStatus('uploadStatus', '上传失败: ' + error.message, 'error');
             } finally {
                 uploadBtn.disabled = false;
@@ -1856,7 +2065,7 @@
             const fileCount = document.getElementById('fileCount');
 
             try {
-                const files = await getFilesList();
+                const files = await getMyFiles();
 
                 if (files.length === 0) {
                     fileListContent.innerHTML = `
@@ -1880,12 +2089,12 @@
                             </div>
                         </div>
                         <div class="file-actions">
-                            <button class="file-action-btn download-btn" onclick="downloadFile('${file.id}', '${escapeHtml(file.fileName)}', ${file.version})">
+                            <button class="file-action-btn download-btn" onclick="downloadFile('${jsString(file.id)}')">
                                 <i class="fas fa-download"></i> 下载
                             </button>
-                            ${file.username === currentUser?.username ? `<button class="file-action-btn delete-btn" onclick="deleteFile('${file.id}')">
+                            <button class="file-action-btn delete-btn" onclick="deleteFile('${jsString(file.id)}')">
                                 <i class="fas fa-trash"></i> 删除
-                            </button>` : ''}
+                            </button>
                         </div>
                     </div>
                 `).join('');
@@ -1915,14 +2124,17 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        async function downloadFile(fileId, fileName, version) {
-            const files = await getFilesList();
+        async function downloadFile(fileId) {
+            const files = await getMyFiles();
             const fileInfo = files.find(f => f.id === fileId);
-            
+
             if (!fileInfo) {
-                showFeedbackStatus('uploadStatus', '文件信息不存在', 'error');
+                showFeedbackStatus('uploadStatus', '文件不存在或无权下载', 'error');
                 return;
             }
+
+            const fileName = fileInfo.fileName;
+            const version = fileInfo.version;
 
             const downloadBtn = document.createElement('a');
             downloadBtn.className = 'btn';
@@ -1976,9 +2188,11 @@
 
                 try {
                     const mergedBuffer = await downloadAndMergeFile({
-                        originalName: fileName,
+                        fileName: fileInfo.fileName,
                         totalChunks: fileInfo.totalChunks || 1,
-                        version: version
+                        version: version,
+                        size: fileInfo.size,
+                        storedChunks: fileInfo.storedChunks
                     });
 
                     const blob = new Blob([mergedBuffer]);
@@ -2009,11 +2223,11 @@
             if (!confirm('确定要删除这个文件吗？')) return;
 
             try {
-                const files = await getFilesList();
+                const files = await getMyFiles();
                 const fileToDelete = files.find(f => f.id === fileId);
 
                 if (!fileToDelete) {
-                    showFeedbackStatus('uploadStatus', '文件不存在', 'error');
+                    showFeedbackStatus('uploadStatus', '文件不存在或无权删除', 'error');
                     return;
                 }
 
@@ -2023,12 +2237,12 @@
                 }
 
                 const apiKey = decodeApiKey();
-                const baseName = fileToDelete.fileName.replace(/\.[^/.]+$/, '');
+                const storedChunks = fileToDelete.storedChunks || [];
                 const totalChunks = fileToDelete.totalChunks || 1;
 
                 for (let i = 0; i < totalChunks; i++) {
-                    const chunkFileName = `v${fileToDelete.version}_${baseName}_chunk${i}.bin`;
-                    const filePath = `files/${chunkFileName}`;
+                    const chunkFileName = storedChunks[i] || buildChunkStoredName(fileToDelete, i);
+                    const filePath = `files/${encodeURIComponent(chunkFileName)}`;
                     const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${filePath}`;
 
                     let sha = null;
@@ -2064,7 +2278,8 @@
                     }
                 }
 
-                const updatedFiles = files.filter(f => f.id !== fileId);
+                const allFiles = await getFilesList();
+                const updatedFiles = allFiles.filter(f => f.id !== fileId);
                 await saveFilesList(updatedFiles);
 
                 await refreshFileList();
