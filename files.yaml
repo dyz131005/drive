@@ -1,1 +1,11 @@
-files: []
+files:
+  - id: 1792744158714op3a8ifrv
+    username: dyz
+    fileName: Kill安装程序.exe
+    version: 2
+    size: 20227952
+    totalChunks: 1
+    chunkSize: 20227952
+    uploadedAt: '2026-10-23T08:29:18.714Z'
+    storedChunks:
+      - v2_Kill安装程序.bin
